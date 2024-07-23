@@ -12,9 +12,10 @@ class ModelParser(Tap):
 model_args = ModelParser().parse_args(known_only=True)
 
 from keras.models import Sequential
-from keras.layers.core import Masking, Dense, Dropout
-from keras.layers.recurrent import LSTM
-from keras.layers.wrappers import Bidirectional
+from keras.layers import Masking, Dense, Dropout, LSTM, Bidirectional
+# from keras.layers.core import Masking, Dense, Dropout
+# from keras.layers.recurrent import LSTM
+# from keras.layers.wrappers import Bidirectional
 
 def build_model():
     print('Build model...')

@@ -8,14 +8,14 @@ from typing import Any, Callable, List, Tuple, Union
 from graph.explainers.approaches.common import WalkBase
 
 
-import captum.attr as ca
-from captum.attr._utils.common import (
+import captum.attr._core.layer.grad_cam as ca
+from captum._utils.common import (
     _format_additional_forward_args,
-    _format_attributions,
-    _format_input,
+    _format_output,
+    _format_inputs,
 )
-from captum.attr._utils.gradient import apply_gradient_requirements, undo_gradient_requirements, compute_layer_gradients_and_eval
-from captum.attr._utils.typing import (
+from captum._utils.gradient import apply_gradient_requirements, undo_gradient_requirements, compute_layer_gradients_and_eval
+from captum._utils.typing import (
     TargetType,
 )
 
@@ -82,12 +82,12 @@ class GraphLayerGradCam(ca.LayerGradCam):
         self.device = device
 
     def attribute(
-        self,
-        inputs: Union[Tensor, Tuple[Tensor, ...]],   # [num_nodes, num_features]
-        target: TargetType = None,  # [1]
-        additional_forward_args: Any = None,   # [2, num_edges]
-        attribute_to_layer_input: bool = False,
-        relu_attributions: bool = False,
+            self,
+            inputs: Union[Tensor, Tuple[Tensor, ...]],   # [num_nodes, num_features]
+            target: TargetType = None,  # [1]
+            additional_forward_args: Any = None,   # [2, num_edges]
+            attribute_to_layer_input: bool = False,
+            relu_attributions: bool = False,
     ) -> Union[Tensor, Tuple[Tensor, ...]]:
         r"""
         Args:
@@ -189,7 +189,7 @@ class GraphLayerGradCam(ca.LayerGradCam):
             # >>> # This can be done with LayerAttribution's interpolate method.
             # >>> upsampled_attr = LayerAttribution.interpolate(attr, (32, 32))
         """
-        inputs = _format_input(inputs)
+        inputs = _format_inputs(inputs)
         additional_forward_args = _format_additional_forward_args(  # tuple(additional_forward_args)
             additional_forward_args
         )
@@ -240,4 +240,4 @@ class GraphLayerGradCam(ca.LayerGradCam):
 
         # end
 
-        return _format_attributions(is_layer_tuple, scaled_acts)
+        return _format_output(is_layer_tuple, scaled_acts)

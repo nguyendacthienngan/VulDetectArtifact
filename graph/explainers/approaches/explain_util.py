@@ -12,22 +12,24 @@ from torch.utils.hooks import RemovableHandle
 
 from captum.attr._utils.attribution import GradientAttribution
 from captum.attr._utils.common import (
-    ExpansionTypes,
     _call_custom_attribution_func,
     _compute_conv_delta_and_format_attrs,
+    _tensorize_baseline,
+    _validate_input
+)
+from captum._utils.common import (
+    ExpansionTypes,
     _expand_additional_forward_args,
     _expand_target,
     _format_additional_forward_args,
     _format_baseline,
-    _format_input,
+    _format_inputs,
     _format_tensor_into_tuples,
     _is_tuple,
-    _run_forward,
-    _tensorize_baseline,
-    _validate_input,
+    _run_forward
 )
-from captum.attr._utils.gradient import apply_gradient_requirements, undo_gradient_requirements
-from captum.attr._utils.typing import (
+from captum._utils.gradient import apply_gradient_requirements, undo_gradient_requirements
+from captum._utils.typing import (
     BaselineType,
     Literal,
     TargetType,
@@ -50,12 +52,12 @@ def _compute_diffs(inputs: Tensor, outputs: Tensor) -> Tuple[Tensor, Tensor]:
 
 
 def nonlinear(
-    module: Module,
-    inputs: Tensor,
-    outputs: Tensor,
-    grad_input: Tensor,
-    grad_output: Tensor,
-    eps: float = 1e-10,
+        module: Module,
+        inputs: Tensor,
+        outputs: Tensor,
+        grad_input: Tensor,
+        grad_output: Tensor,
+        eps: float = 1e-10,
 ):
     r"""
     grad_input: (dLoss / dprev_layer_out, dLoss / wij, dLoss / bij)
@@ -70,7 +72,7 @@ def nonlinear(
     # only the first element in `grad_input` and `grad_output`
     new_grad_inp[0] = torch.where(
         abs(delta_in) < eps, new_grad_inp[0], grad_output[0] * delta_out / delta_in,
-    )
+        )
 
     # If the module is invalid, save the newly computed gradients
     # The original_grad_input will be overridden later in the Tensor hook
@@ -80,19 +82,19 @@ def nonlinear(
 
 
 def softmax(
-    module: Module,
-    inputs: Tensor,
-    outputs: Tensor,
-    grad_input: Tensor,
-    grad_output: Tensor,
-    eps: float = 1e-10,
+        module: Module,
+        inputs: Tensor,
+        outputs: Tensor,
+        grad_input: Tensor,
+        grad_output: Tensor,
+        eps: float = 1e-10,
 ):
     delta_in, delta_out = _compute_diffs(inputs, outputs)
 
     new_grad_inp = list(grad_input)
     grad_input_unnorm = torch.where(
         abs(delta_in) < eps, new_grad_inp[0], grad_output[0] * delta_out / delta_in,
-    )
+        )
     # normalizing
     n = np.prod(grad_input[0].shape)
 
@@ -102,12 +104,12 @@ def softmax(
 
 
 def maxpool1d(
-    module: Module,
-    inputs: Tensor,
-    outputs: Tensor,
-    grad_input: Tensor,
-    grad_output: Tensor,
-    eps: float = 1e-10,
+        module: Module,
+        inputs: Tensor,
+        outputs: Tensor,
+        grad_input: Tensor,
+        grad_output: Tensor,
+        eps: float = 1e-10,
 ):
     return maxpool(
         module,
@@ -122,12 +124,12 @@ def maxpool1d(
 
 
 def maxpool2d(
-    module: Module,
-    inputs: Tensor,
-    outputs: Tensor,
-    grad_input: Tensor,
-    grad_output: Tensor,
-    eps: float = 1e-10,
+        module: Module,
+        inputs: Tensor,
+        outputs: Tensor,
+        grad_input: Tensor,
+        grad_output: Tensor,
+        eps: float = 1e-10,
 ):
     return maxpool(
         module,
@@ -142,7 +144,7 @@ def maxpool2d(
 
 
 def maxpool3d(
-    module: Module, inputs, outputs, grad_input, grad_output, eps: float = 1e-10
+        module: Module, inputs, outputs, grad_input, grad_output, eps: float = 1e-10
 ):
     return maxpool(
         module,
@@ -157,14 +159,14 @@ def maxpool3d(
 
 
 def maxpool(
-    module: Module,
-    pool_func: Callable,
-    unpool_func: Callable,
-    inputs,
-    outputs,
-    grad_input,
-    grad_output,
-    eps: float = 1e-10,
+        module: Module,
+        pool_func: Callable,
+        unpool_func: Callable,
+        inputs,
+        outputs,
+        grad_input,
+        grad_output,
+        eps: float = 1e-10,
 ):
     with torch.no_grad():
         input, input_ref = inputs.chunk(2)
@@ -197,7 +199,7 @@ def maxpool(
                 module.stride,
                 module.padding,
                 list(cast(torch.Size, module.input.shape)),
-            ),
+                ),
             2,
         )
 
@@ -257,8 +259,8 @@ def _check_valid_module(inputs_grad_fn, outputs) -> bool:
         layer deeplift.
         """
         return (
-            output_fn[0].next_functions is not None
-            and output_fn[0].next_functions[0][0] == input_grad_fn
+                output_fn[0].next_functions is not None
+                and output_fn[0].next_functions[0][0] == input_grad_fn
         )
 
     curr_fn = outputs.grad_fn
@@ -268,9 +270,9 @@ def _check_valid_module(inputs_grad_fn, outputs) -> bool:
         # for that input backward_hook isn't computed. That's the reason why we
         # need to check on `inputs_grad_fns[first_next[1]]` being None.
         return (
-            inputs_grad_fn is None
-            or first_next[0] == inputs_grad_fn
-            or is_output_cloned(first_next, inputs_grad_fn)
+                inputs_grad_fn is None
+                or first_next[0] == inputs_grad_fn
+                or is_output_cloned(first_next, inputs_grad_fn)
         )
     except IndexError:
         return False
@@ -321,37 +323,37 @@ class DeepLiftUtil(GradientAttribution):
 
     @typing.overload
     def attribute(
-        self,
-        inputs: TensorOrTupleOfTensorsGeneric,
-        baselines: BaselineType = None,
-        target: TargetType = None,
-        additional_forward_args: Any = None,
-        return_convergence_delta: Literal[False] = False,
-        custom_attribution_func: Union[None, Callable[..., Tuple[Tensor, ...]]] = None,
+            self,
+            inputs: TensorOrTupleOfTensorsGeneric,
+            baselines: BaselineType = None,
+            target: TargetType = None,
+            additional_forward_args: Any = None,
+            return_convergence_delta: Literal[False] = False,
+            custom_attribution_func: Union[None, Callable[..., Tuple[Tensor, ...]]] = None,
     ) -> TensorOrTupleOfTensorsGeneric:
         ...
 
     @typing.overload
     def attribute(
-        self,
-        inputs: TensorOrTupleOfTensorsGeneric,
-        baselines: BaselineType = None,
-        target: TargetType = None,
-        additional_forward_args: Any = None,
-        *,
-        return_convergence_delta: Literal[True],
-        custom_attribution_func: Union[None, Callable[..., Tuple[Tensor, ...]]] = None,
+            self,
+            inputs: TensorOrTupleOfTensorsGeneric,
+            baselines: BaselineType = None,
+            target: TargetType = None,
+            additional_forward_args: Any = None,
+            *,
+            return_convergence_delta: Literal[True],
+            custom_attribution_func: Union[None, Callable[..., Tuple[Tensor, ...]]] = None,
     ) -> Tuple[TensorOrTupleOfTensorsGeneric, Tensor]:
         ...
 
     def attribute(  # type: ignore
-        self,
-        inputs: TensorOrTupleOfTensorsGeneric,
-        baselines: BaselineType = None,
-        target: TargetType = None,
-        additional_forward_args: Any = None,
-        return_convergence_delta: bool = False,
-        custom_attribution_func: Union[None, Callable[..., Tuple[Tensor, ...]]] = None,
+            self,
+            inputs: TensorOrTupleOfTensorsGeneric,
+            baselines: BaselineType = None,
+            target: TargetType = None,
+            additional_forward_args: Any = None,
+            return_convergence_delta: bool = False,
+            custom_attribution_func: Union[None, Callable[..., Tuple[Tensor, ...]]] = None,
     ) -> Union[
         TensorOrTupleOfTensorsGeneric, Tuple[TensorOrTupleOfTensorsGeneric, Tensor]
     ]:
@@ -497,7 +499,7 @@ class DeepLiftUtil(GradientAttribution):
         # converting it into a tuple.
         is_inputs_tuple = _is_tuple(inputs)
 
-        inputs = _format_input(inputs)
+        inputs = _format_inputs(inputs)
         baselines = _format_baseline(baselines, inputs)
 
         gradient_mask = apply_gradient_requirements(inputs)
@@ -556,11 +558,11 @@ class DeepLiftUtil(GradientAttribution):
         )
 
     def _construct_forward_func(
-        self,
-        forward_func: Callable,
-        inputs: Tuple,
-        target: TargetType = None,
-        additional_forward_args: Any = None,
+            self,
+            forward_func: Callable,
+            inputs: Tuple,
+            target: TargetType = None,
+            additional_forward_args: Any = None,
     ) -> Callable:
         def forward_fn():
             return _run_forward(forward_func, inputs, target, additional_forward_args)
@@ -573,7 +575,7 @@ class DeepLiftUtil(GradientAttribution):
         return type(module) in SUPPORTED_NON_LINEAR.keys()
 
     def _forward_pre_hook_ref(
-        self, module: Module, inputs: Union[Tensor, Tuple[Tensor, ...]]
+            self, module: Module, inputs: Union[Tensor, Tuple[Tensor, ...]]
     ) -> None:
         inputs = _format_tensor_into_tuples(inputs)
         module.input_ref = tuple(  # type: ignore
@@ -581,7 +583,7 @@ class DeepLiftUtil(GradientAttribution):
         )
 
     def _forward_pre_hook(
-        self, module: Module, inputs: Union[Tensor, Tuple[Tensor, ...]]
+            self, module: Module, inputs: Union[Tensor, Tuple[Tensor, ...]]
     ) -> None:
         """
         For the modules that perform in-place operations such as ReLUs, we cannot
@@ -612,10 +614,10 @@ class DeepLiftUtil(GradientAttribution):
         module.input_hook = handle
 
     def _forward_hook(
-        self,
-        module: Module,
-        inputs: Union[Tensor, Tuple[Tensor, ...]],
-        outputs: Union[Tensor, Tuple[Tensor, ...]],
+            self,
+            module: Module,
+            inputs: Union[Tensor, Tuple[Tensor, ...]],
+            outputs: Union[Tensor, Tuple[Tensor, ...]],
     ) -> None:
         r"""
         we need forward hook to access and detach the inputs and
@@ -642,11 +644,11 @@ class DeepLiftUtil(GradientAttribution):
         del module.input_grad_fns
 
     def _backward_hook(
-        self,
-        module: Module,
-        grad_input: Union[Tensor, Tuple[Tensor, ...]],
-        grad_output: Union[Tensor, Tuple[Tensor, ...]],
-        eps: float = 1e-10,
+            self,
+            module: Module,
+            grad_input: Union[Tensor, Tuple[Tensor, ...]],
+            grad_output: Union[Tensor, Tuple[Tensor, ...]],
+            eps: float = 1e-10,
     ):
         r"""
          `grad_input` is the gradient of the neuron with respect to its input
@@ -691,9 +693,9 @@ class DeepLiftUtil(GradientAttribution):
         module_fullname = str(type(module))
         has_already_hooks = len(module._backward_hooks) > 0  # type: ignore
         return not (
-            "nn.modules.container" in module_fullname
-            or has_already_hooks
-            or not self._is_non_linear(module)
+                "nn.modules.container" in module_fullname
+                or has_already_hooks
+                or not self._is_non_linear(module)
         )
 
     def _register_hooks(self, module: Module) -> None:

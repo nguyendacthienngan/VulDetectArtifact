@@ -25,6 +25,11 @@ def get_func_md5(cpg_graph: Dict[str, Union[str, List[str], List[int]]]):
     md5_value = getMD5(json.dumps(line_contents))
     return md5_value
 
+def get_sequence_md5(sequence: Dict[str, Union[str, List[str]]]) -> str:
+    line_contents: List[str] = sequence.get("line-contents", [])
+    md5_value = getMD5(json.dumps(line_contents))
+    return md5_value
+
 def process_func_datas(label_info: Dict[str, List[int]],
                   cpg_graphs: List[Dict[str, Union[str, List[str], List[int]]]]):
     vul_samples: List[Dict[str, Union[str, List[str]]]] = list()
@@ -101,6 +106,47 @@ def dump_to_output_dir(vul_samples: List[Dict], normal_samples: List[Dict], outp
     for datas, file_name in zip(output_datas, output_file_names):
         json.dump(datas, open(os.path.join(output_json_dir, file_name), 'w', encoding='utf-8'), indent=2)
 
+def process_sequence_datas(label_info: Dict[str, List[int]],
+                           sequences: List[Dict[str, Union[str, List[str]]]]):
+    vul_samples: List[Dict[str, Union[str, List[str]]]] = list()
+    normal_samples: List[Dict[str, Union[str, List[str]]]] = list()
+
+    vul_md5_set = set()
+    normal_md5_set = set()
+
+    for sequence in tqdm(sequences, desc="Labeling sequences"):
+        testcase_path = sequence.get("id2file", None)  # Sử dụng get để tránh lỗi nếu không có khóa
+        print(f"testcase_path type: {type(testcase_path)}, value: {testcase_path}")
+
+        if testcase_path is None:
+            print(f"Warning: 'id2file' not found in sequence data: {sequence}")
+            continue
+        md5_value = get_sequence_md5(sequence)
+        if testcase_path not in label_info.keys():
+            if md5_value not in normal_md5_set:
+                normal_md5_set.add(md5_value)
+                normal_samples.append(sequence)
+            continue
+
+        vul_line_nos: List[int] = label_info[testcase_path]
+        line_nos: List[int] = sequence["line-Nos"]
+        vul_idxs: List[int] = [i for i, line_no in enumerate(line_nos) if line_no in vul_line_nos]
+        if not vul_idxs:
+            if md5_value not in normal_md5_set:
+                normal_md5_set.add(md5_value)
+                normal_samples.append(sequence)
+        else:
+            if md5_value not in vul_md5_set:
+                vul_md5_set.add(md5_value)
+                sequence["tri_line_idxs"] = vul_idxs # k có
+                vul_samples.append(sequence)
+
+    both_md5_set = vul_md5_set & normal_md5_set
+    final_normal_samples = [seq for seq in tqdm(normal_samples, desc="removing noise normal samples") if get_sequence_md5(seq) not in both_md5_set]
+
+    print("Labeling sequences done. Vulnerable sequence num: {}, normal sequence num: {}".format(len(vul_samples), len(final_normal_samples)))
+    return vul_samples, final_normal_samples
+
 
 if __name__ == '__main__':
     level = sys.argv[1]
@@ -113,3 +159,9 @@ if __name__ == '__main__':
             json.load(open(json_data_file, 'r', encoding='utf-8'))
         vul_samples, normal_samples = process_func_datas(label_info, cpg_graphs)
         dump_to_output_dir(vul_samples, normal_samples, output_dir)
+    elif level == "slice":
+        sequences: List[Dict[str, Union[str, List[str]]]] = json.load(open(json_data_file, 'r', encoding='utf-8'))
+        vul_samples, normal_samples = process_sequence_datas(label_info, sequences)
+        dump_to_output_dir(vul_samples, normal_samples, output_dir)
+    else:
+        print(f"Unsupported level: {level}")

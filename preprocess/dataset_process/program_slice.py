@@ -3,8 +3,8 @@ from tqdm import tqdm
 import sys
 from typing import List, Dict, Union, DefaultDict, Set, Tuple
 from collections import defaultdict
-from utils.ast_def import ASTNode, json2astNode
-from utils.ast_analyzer import CallTargetChecker, SyVCChecker
+from ast_def import ASTNode, json2astNode
+from ast_analyzer import CallTargetChecker, SyVCChecker
 from symbolizing_tool import SymbolizingTool
 
 def group_by_testcase(datas: List[Dict[str, Union[str, List[str]]]]) -> \
@@ -250,7 +250,8 @@ def main():
         total_syses.update(slicing_tool.syses)
 
     output_path = sys.argv[2]
-    json.dump(list(total_syses), open(output_path, 'w', encoding='utf-8'), indent=2)
+    json_serializable_data = [syse_slice.toJson() for syse_slice in total_syses]
+    json.dump(json_serializable_data, open(output_path, 'w', encoding='utf-8'), indent=2)
 
 
 if __name__ == '__main__':

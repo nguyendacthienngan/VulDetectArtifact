@@ -1,7 +1,7 @@
 from typing import List, Set, Tuple, Dict, Union
-from utils.ast_analyzer import ASTVarAnalyzer
-from utils.ast_def import ASTNode, json2astNode
-from utils.ast_traverse_util import ASTNodeASTProvider
+from ast_analyzer import ASTVarAnalyzer
+from ast_def import ASTNode, json2astNode
+from ast_traverse_util import ASTNodeASTProvider
 import json
 
 # symbolized variable names and function names

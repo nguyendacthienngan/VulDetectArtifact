@@ -15,20 +15,24 @@ class RevealUtil(object):
         self.arrays = np.eye(len(type_map))
         self.device = device
 
-    # 生成图中每个ASTNode的初始embedding，在训练阶段这个函数只执行一次
-    # nodeContent[0] 为type, nodeContent[1] 为token sequence
+    # Generates the initial embedding of each ASTNode in the graph. This function is only executed once during the training phase.
+    # nodeContent[0] is type, nodeContent[1] is token sequence
     def generate_initial_astNode_embedding(self, nodeContent: List[str]) -> np.array:
         # type vector
         n_c = self.arrays[type_map[nodeContent[0]] - 1]
         # token sequence
         token_seq: List[str] = nodeContent[1].split(' ')
-        n_v = np.array([self.pretrain_model[word] if word in self.pretrain_model.wv.vocab else
-                           np.zeros(model_args.vector_size) for word in token_seq]).mean(axis=0)
-
+        # n_v = np.array([self.pretrain_model[word] if word in self.pretrain_model.wv.vocab else
+        #                    np.zeros(model_args.vector_size) for word in token_seq]).mean(axis=0)
+        # https://github.com/piskvorky/gensim/wiki/Migrating-from-Gensim-3.x-to-4
+        keyed_vectors = self.pretrain_model.wv
+        n_v = np.array([keyed_vectors.get_vector(word) if word in keyed_vectors.key_to_index else
+                    np.zeros(keyed_vectors.vector_size) for word in token_seq]).mean(axis=0)
+        
         v = np.concatenate([n_c, n_v])
         return v
 
-    # 生成每个AST初始结点的信息
+    # Generate information for each AST initial node
     def generate_initial_node_info(self, ast: Dict) -> Data:
         astEmbedding: np.array = np.array([self.generate_initial_astNode_embedding(node_info) for node_info in ast["contents"]])
         x: torch.FloatTensor = torch.FloatTensor(astEmbedding)
@@ -36,7 +40,7 @@ class RevealUtil(object):
         edge_index: torch.LongTensor = torch.LongTensor(edges).t()
         return Batch.from_data_list([Data(x=x, edge_index=edge_index)]).to(device=self.device)
 
-    # 预处理训练数据， 训练过程只调用1次
+    # Preprocess training data. The training process is only called once.
     def generate_initial_embedding(self, data: Dict) -> Tuple[int, List[Data], torch.LongTensor]:
         # label, List[ASTNode], edge
         if "target" in data.keys():
@@ -57,7 +61,7 @@ class RevealUtil(object):
 
         return (label, graph_data_for_each_nodes, edge_index)
 
-    # 生成图初始向量， 每个epoch会调用1次
+    # Generate graph initialization vector, called once per epoch
     def generate_initial_graph_embedding(self, graph_info: Tuple[int, List[Data], torch.LongTensor]) -> Data:
         # self.reveal_model.embed_graph(data)[0] return graph_embedding for initial CPG node
         initial_embeddings: List[torch.FloatTensor] = [self.reveal_model.embed_graph(data.x, data.edge_index, None)[0].reshape(-1,)

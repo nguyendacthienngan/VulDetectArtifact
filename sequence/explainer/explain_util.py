@@ -1,12 +1,5 @@
-import nltk
 import numpy as np
-import time
-
-from Explainer import *
-import shap
-import lime
-from GradientExplainer.GradientExplainer_masking import *
-from Explainer import Explainer
+# from Explainer import Explainer
 
 from gensim.models.word2vec import Word2Vec
 from sequence.detectors.sequence_util import SequenceUtil
@@ -14,14 +7,14 @@ from sequence.detectors.models.tokenlstm import model_args as tl_model_args
 from sequence.detectors.models.sysyer import model_args as syse_model_args
 from sequence.detectors.models.vuldeepecker import model_args as vdp_model_args
 
-import random
+# import random
 import json
 import os
 from typing import List, Dict
 from tqdm import tqdm
-from collections import Counter
+# from collections import Counter
 
-import keras
+# import keras
 
 masking_len = {
     "tokenlstm": tl_model_args.maxLen,

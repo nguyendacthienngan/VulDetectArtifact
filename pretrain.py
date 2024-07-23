@@ -44,6 +44,7 @@ class Sentences:
                     yield statement_after_split
             # deepwukong
             elif self.detector == "deepwukong":
+                print(graph_data)
                 contents = graph_data["nodes-line-sym"]
                 for statement in contents:
                     statement_after_split = nltk.word_tokenize(statement)
@@ -72,5 +73,6 @@ if __name__ == '__main__':
                               json.load(open(os.path.join(train_dataset_path,
                                                           "train_normal.json"), 'r', encoding='utf-8'))
     sentences = Sentences(train_jsons, detector_name)
-    model = Word2Vec(sentences, size=w2v_sizes[detector_name], window=window_size, hs=1, min_count=1, iter=20)
+    # model = Word2Vec(sentences, size=w2v_sizes[detector_name], window=window_size, hs=1, min_count=1, iter=20)
+    model = Word2Vec(sentences, vector_size=w2v_sizes[detector_name], window=window_size, hs=1, min_count=1, epochs=20)
     model.save(pretrain_doc2vec_model_path)

@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 from torch_geometric.nn import global_add_pool, global_max_pool, global_mean_pool
 from torch_sparse import SparseTensor
-from torch.tensor import Tensor
+from torch import Tensor
+# from torch.tensor import Tensor
 
 from torch_geometric.typing import Adj, OptTensor
 from torch_geometric.nn.conv import GCNConv, gcn_conv
