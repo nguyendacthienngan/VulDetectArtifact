@@ -45,7 +45,7 @@ class Sentences:
             # deepwukong
             elif self.detector == "deepwukong":
                 print(graph_data)
-                contents = graph_data["nodes-line-sym"]
+                contents = graph_data["nodes-line-sym"] # ???
                 for statement in contents:
                     statement_after_split = nltk.word_tokenize(statement)
                     yield statement_after_split
@@ -53,7 +53,7 @@ class Sentences:
             # Sequence Based Detector
             else:
                 contents: List[str] = list()
-                json_contents: List[str] = graph_data["node-line-content"]
+                json_contents: List[str] = graph_data["line-contents"]
                 for json_content in json_contents:
                     statement_after_split = nltk.word_tokenize(json_content)
                     contents.extend(statement_after_split)
