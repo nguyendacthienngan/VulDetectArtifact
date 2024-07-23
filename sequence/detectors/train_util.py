@@ -45,11 +45,11 @@ class SequenceTrainUtil:
         self.util: SequenceUtil = SequenceUtil(w2v_model, self.device, masking_len[train_args.detector])
 
     def generator_of_data(self, datas):
-        iter_num = int(len(datas) / self.train_args.batchSize)
+        iter_num = int(len(datas) / self.train_args.batch_size)
         i = 0
 
         while iter_num:
-            batchdata = datas[i:i + self.train_args.batchSize]
+            batchdata = datas[i:i + self.train_args.batch_size]
             batch_idxs = [self.util.tokenize_data(data) for data in batchdata]
             batch_vectors = np.array([self.util.embeddings_matrix[idx] for idx in batch_idxs])
             batched_labels = []
@@ -60,11 +60,11 @@ class SequenceTrainUtil:
                     batched_labels.append(1)
 
             yield ([batch_vectors], batched_labels)
-            i = i + self.train_args.batchSize
+            i = i + self.train_args.batch_size
 
             iter_num -= 1
             if iter_num == 0:
-                iter_num = int(len(datas) / self.train_args.batchSize)
+                iter_num = int(len(datas) / self.train_args.batch_size)
                 i = 0
 
     def train(self):
@@ -75,7 +75,7 @@ class SequenceTrainUtil:
 
         random.shuffle(all_datas)
         train_generator = self.generator_of_data(all_datas)
-        self.sequence_model.fit_generator(train_generator, steps_per_epoch=int(len(all_datas) / self.train_args.batchSize), epochs=20,
+        self.sequence_model.fit_generator(train_generator, steps_per_epoch=int(len(all_datas) / self.train_args.batch_size), epochs=20,
                             callbacks=[callback], class_weight=weight_dict)
         self.sequence_model.save(self.model_path)
 
@@ -83,8 +83,8 @@ class SequenceTrainUtil:
     def test(self):
         all_datas = self.test_positive + self.test_negative
         test_dataloader = self.generator_of_data(all_datas)
-        batch_num = len(all_datas) // self.train_args.batchSize if len(all_datas) % self.train_args.batchSize == 0 \
-            else len(all_datas) // self.train_args.batchSize + 1
+        batch_num = len(all_datas) // self.train_args.batch_size if len(all_datas) % self.train_args.batch_size == 0 \
+            else len(all_datas) // self.train_args.batch_size + 1
         TN = TP = FP = FN = 0
 
         for i, data in enumerate(test_dataloader):
