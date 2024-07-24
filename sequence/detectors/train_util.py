@@ -42,7 +42,26 @@ class SequenceTrainUtil:
         self.test_negative: List[Dict] = load_data(train_args.dataset_dir, "test_normal.json", 0)
 
         self.train_args = train_args
-        self.util: SequenceUtil = SequenceUtil(w2v_model, self.device, masking_len[train_args.detector])
+        self.util: SequenceUtil = SequenceUtil(w2v_model, self.device, train_args.detector)
+
+    @staticmethod
+    def pad_sequences(sequences, maxlen=None, dtype='int32', padding='post', value=0.):
+        if maxlen is None:
+            maxlen = max(len(x) for x in sequences)
+
+        x = (np.ones((len(sequences), maxlen)) * value).astype(dtype)
+
+        for idx, s in enumerate(sequences):
+            if len(s) == 0:
+                continue
+            if padding == 'post':
+                x[idx, :len(s)] = s
+            elif padding == 'pre':
+                x[idx, -len(s):] = s
+            else:
+                raise ValueError('Padding type "%s" not understood' % padding)
+
+        return x
 
     def generator_of_data(self, datas):
         iter_num = int(len(datas) / self.train_args.batch_size)
@@ -51,16 +70,15 @@ class SequenceTrainUtil:
         while iter_num:
             batchdata = datas[i:i + self.train_args.batch_size]
             batch_idxs = [self.util.tokenize_data(data) for data in batchdata]
-            batch_vectors = np.array([self.util.embeddings_matrix[idx] for idx in batch_idxs])
-            batched_labels = []
-            for data in batchdata:
-                if data["label"][0] == 0:
-                    batched_labels.append(0)
-                else:
-                    batched_labels.append(1)
+
+            # Đệm batch_idxs để tất cả các danh sách con có cùng độ dài
+            padded_batch_idxs = self.pad_sequences(batch_idxs)
+
+            batch_vectors = np.array([self.util.embeddings_matrix[idx] for idx in padded_batch_idxs], dtype=np.float32)
+            batched_labels = np.array([data["target"] for data in batchdata], dtype=np.int32)
 
             yield ([batch_vectors], batched_labels)
-            i = i + self.train_args.batch_size
+            i += self.train_args.batch_size
 
             iter_num -= 1
             if iter_num == 0:
@@ -70,21 +88,19 @@ class SequenceTrainUtil:
     def train(self):
         weight = len(self.train_negative) / len(self.train_positive)
         weight_dict = {0: 1, 1: weight}
-        callback = keras.callbacks.EarlyStopping(monitor='loss', patience=2)  # 使用loss作为监测数据，轮数设置为1
+        callback = keras.callbacks.EarlyStopping(monitor='loss', patience=2)
         all_datas = self.train_positive + self.train_negative
 
         random.shuffle(all_datas)
         train_generator = self.generator_of_data(all_datas)
-        self.sequence_model.fit_generator(train_generator, steps_per_epoch=int(len(all_datas) / self.train_args.batch_size), epochs=20,
-                            callbacks=[callback], class_weight=weight_dict)
+        self.sequence_model.fit(train_generator, steps_per_epoch=int(len(all_datas) / self.train_args.batch_size), epochs=20,
+                                callbacks=[callback], class_weight=weight_dict)
         self.sequence_model.save(self.model_path)
-
 
     def test(self):
         all_datas = self.test_positive + self.test_negative
         test_dataloader = self.generator_of_data(all_datas)
-        batch_num = len(all_datas) // self.train_args.batch_size if len(all_datas) % self.train_args.batch_size == 0 \
-            else len(all_datas) // self.train_args.batch_size + 1
+        batch_num = len(all_datas) // self.train_args.batch_size if len(all_datas) % self.train_args.batch_size == 0 else len(all_datas) // self.train_args.batch_size + 1
         TN = TP = FP = FN = 0
 
         for i, data in enumerate(test_dataloader):
