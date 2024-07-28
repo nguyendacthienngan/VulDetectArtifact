@@ -13,6 +13,7 @@ from graph.detectors.models.ivdetect import model_args as ivdetect_model_args
 from graph.detectors.detector_utils.ivdetect_util import lexical_parse
 
 from sequence.detectors.models.tokenlstm import model_args as tl_model_args
+from sequence.detectors.models.sysyer import model_args as sysyer_model_args
 
 # pretrain embedding models for detectors
 window_size = 10
@@ -22,7 +23,7 @@ w2v_sizes = {
     "devign": devign_model_args.vector_size,
     "reveal": reveal_model_args.vector_size,
     "ivdetect": ivdetect_model_args.feature_representation_size,
-
+    "sysevr": sysyer_model_args.vector_size,
     "tokenlstm": tl_model_args.vector_size
 }
 
