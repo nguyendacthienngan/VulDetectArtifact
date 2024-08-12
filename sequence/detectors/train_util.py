@@ -13,6 +13,7 @@ from typing import List, Dict
 from collections import Counter
 
 import keras
+from sklearn.utils.class_weight import compute_class_weight
 
 masking_len = {
     "tokenlstm": tl_model_args.maxLen,
@@ -63,38 +64,54 @@ class SequenceTrainUtil:
 
         return x
 
-    def generator_of_data(self, datas):
-        iter_num = int(len(datas) / self.train_args.batch_size)
-        i = 0
+    def generator_of_data(self, datas, class_weight):
+        while True:
+            iter_num = int(len(datas) / self.train_args.batch_size)
+            i = 0
 
-        while iter_num:
-            batchdata = datas[i:i + self.train_args.batch_size]
-            batch_idxs = [self.util.tokenize_data(data) for data in batchdata]
+            while iter_num:
+                batchdata = datas[i:i + self.train_args.batch_size]
+                batch_idxs = [self.util.tokenize_data(data) for data in batchdata]
 
-            # Đệm batch_idxs để tất cả các danh sách con có cùng độ dài
-            padded_batch_idxs = self.pad_sequences(batch_idxs)
+                # Đệm batch_idxs để tất cả các danh sách con có cùng độ dài
+                padded_batch_idxs = self.pad_sequences(batch_idxs)
 
-            batch_vectors = np.array([self.util.embeddings_matrix[idx] for idx in padded_batch_idxs], dtype=np.float32)
-            batched_labels = np.array([data["target"] for data in batchdata], dtype=np.int32)
+                batch_vectors = np.array([self.util.embeddings_matrix[idx] for idx in padded_batch_idxs], dtype=np.float32)
+                batched_labels = np.array([data["target"] for data in batchdata], dtype=np.int32)
+                
+                # Tính toán sample_weight dựa trên class_weight
+                sample_weights = np.array([class_weight[label] for label in batched_labels], dtype=np.float32)
 
-            yield ([batch_vectors], batched_labels)
-            i += self.train_args.batch_size
+                yield (batch_vectors, batched_labels, sample_weights)
+                i += self.train_args.batch_size
 
-            iter_num -= 1
-            if iter_num == 0:
-                iter_num = int(len(datas) / self.train_args.batch_size)
-                i = 0
+                iter_num -= 1
+                if iter_num == 0:
+                    iter_num = int(len(datas) / self.train_args.batch_size)
+                    i = 0
 
     def train(self):
-        weight = len(self.train_negative) / len(self.train_positive)
-        weight_dict = {0: 1, 1: weight}
+        # Tính toán class_weight
+        all_labels = [data["target"] for data in self.train_positive + self.train_negative]
+        class_labels = np.unique(all_labels)
+        class_weights = compute_class_weight(class_weight='balanced', classes=class_labels, y=all_labels)
+        class_weight_dict = dict(zip(class_labels, class_weights))
+
         callback = keras.callbacks.EarlyStopping(monitor='loss', patience=2)
         all_datas = self.train_positive + self.train_negative
 
         random.shuffle(all_datas)
-        train_generator = self.generator_of_data(all_datas)
-        self.sequence_model.fit(train_generator, steps_per_epoch=int(len(all_datas) / self.train_args.batch_size), epochs=20,
-                                callbacks=[callback], class_weight=weight_dict)
+        train_generator = self.generator_of_data(all_datas, class_weight_dict)
+        
+        steps_per_epoch = int(len(all_datas) / self.train_args.batch_size)
+        
+        # Huấn luyện mô hình với sample_weight
+        self.sequence_model.fit(
+            train_generator,
+            steps_per_epoch=steps_per_epoch,
+            epochs=20,
+            callbacks=[callback]
+        )
         self.sequence_model.save(self.model_path)
 
     def test(self):
